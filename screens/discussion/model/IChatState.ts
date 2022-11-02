@@ -4,4 +4,8 @@ export interface IChatState {
   stepIndex: number,
   messages: Array<IMessage>,
   botIsTyping: boolean,
+  textInput: {
+    shown: boolean,
+    content: undefined | string
+  }
 }

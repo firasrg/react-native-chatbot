@@ -14,6 +14,8 @@ import {
     Reply,
     QuickRepliesProps,
     Bubble,
+    InputToolbar,
+    Send,
 } from 'react-native-gifted-chat';
 import { RootStackScreenProps } from "@app/types";
 import { List } from "react-native-paper";
@@ -24,14 +26,21 @@ import {
 import { IChatState } from "./model";
 import styles from "./styles";
 import messagesData from "./state/messagesData";
+import { AppContext } from "@app/App";
 
 export default function ChatBotScreen( {navigation: _navigation}: RootStackScreenProps<'ChatScreen'> ) {
 
+    const appCntxt = React.useContext(AppContext);
+    
     /** Using React useState() **/
     const initialState: IChatState = {
         botIsTyping: true,
         stepIndex: 0,
         messages: [],
+        textInput: {
+            shown: false,
+            content: undefined
+        }
     };
 
     const [reinitialized, setReinit] = React.useState<boolean>( false )
@@ -121,7 +130,7 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
 
     // send msg handler
     const onSendMsg = ( messages: Array<IMessage> = [] ) => {
-
+        
         let {stepIndex} = chatState;
 
         stepIndex++;
@@ -143,6 +152,10 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                     sentMessages,
                     Platform.OS !== 'web',
                 ),
+                textInput: {
+                    content: undefined,
+                    shown: false
+                },
                 stepIndex,
             }
         } )
@@ -181,26 +194,65 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
 
     // After bot msg without quick reply handler
     // TODO - needs more care & improvements
-    function autoMsgAfterNoReply( id: number ) {
+    function autoMsgAfterNoReply(id: number) {
 
-        const { MessageID } = ChatConstants;
+    const {MessageID} = ChatConstants;
 
-        const timeToWait: number = BusinessUtils.BOT_TYPING_DELAY_IN_SECONDS + 1000;
+    const timeToWait: number = BusinessUtils.BOT_TYPING_DELAY_IN_SECONDS + 1000;
 
-        // actions to do based on specific ids
-        switch (id) {
-            case MessageID.MESSAGE_QUIT_ID:
-                setTimeout( () => {
+    // actions to do based on specific ids
+    switch (id) {
+      case MessageID.MESSAGE_SIGNUP_ID:
+        setTimeout(() => {
 
-                        // FRE - FIXME: fix typing for navigation; 
-                        //  @ts-ignore
-                        _navigation.goBack();
-                    },
-                    timeToWait
-                )
-                break;
-        }
+            setChatState(currentState => {
+
+              return {
+                ...currentState,
+                textInput: {
+                  ...currentState.textInput,
+                  shown: true
+                }
+              }
+            })
+          },
+          timeToWait - 2000
+        );
+        break;
+        
+      case MessageID.MESSAGE_CHECK_PROFILE_ID:
+        setTimeout(() => {
+
+            const {profile} = appCntxt;
+            const {textInput} = chatState;
+            
+            if (profile == textInput.content)
+              botSend(MessageID.MESSAGE_GO_TO_PROFILE_ID);
+            else
+              botSend(MessageID.MESSAGE_PROFILE_NOT_FOUND_ID);
+          },
+          timeToWait
+        );
+        break;
+        
+      case MessageID.MESSAGE_PROFILE_NOT_FOUND_ID:
+        setTimeout(() => {
+            botSend(MessageID.MESSAGE_SOMETHING_ELSE_ID);
+          },
+          timeToWait
+        );
+        break;
+        
+      case MessageID.MESSAGE_QUIT_ID:
+        setTimeout(() => {
+            _navigation.goBack();
+          },
+          timeToWait
+        );
+        break;
+
     }
+  }
 
     /** rendering **/
     function buildQuickReplies( quickReplies: QuickRepliesProps ): React.ReactNode {
@@ -228,10 +280,15 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
         }
     }
     
+    const {
+        shown: textInputShown,
+        content: textInputContent
+    } = chatState.textInput;
 
     return (
         <View style={styles.container}>
             <GiftedChat
+                text={textInputContent}
                 user={BusinessUtils.INSURED}
                 messages={chatState.messages}
                 isTyping={chatState.botIsTyping}
@@ -249,7 +306,12 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                             style={styles.botAvatarImg}
                         />)
                 }}
-                renderInputToolbar={() => null}
+                renderInputToolbar={(props) => {
+                    return textInputShown ? <InputToolbar {...props} /> : null ;
+                }}
+                renderSend={(props) => {
+                    return  textInputShown ? <Send {...props} /> : null;
+                }}
                 renderTime={( timeProps ) => (
                     <View style={{
                         flex: 1,
@@ -274,7 +336,7 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                 quickReplyStyle={styles.quickReply}
             />
             {
-                Platform.OS === 'android' && <KeyboardAvoidingView behavior="padding"/>
+                Platform.OS === 'android' && <KeyboardAvoidingView behavior="height"/>
             }
         </View>
     )
