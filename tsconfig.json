@@ -18,7 +18,7 @@
     "paths": {
       "@app/*": ["./*"],
       "@EntryPoint": ["App.tsx"],
-      "@redux/*": ["./src/@redux/*"]
+      "@redux/*": ["./@redux/*"]
     },
     "typeRoots": [
       "./node_modules/@types",

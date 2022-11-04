@@ -29,7 +29,24 @@ const messages = [
   },
   {
     _id: MessageID.MESSAGE_SIGNUP_ID,
-    text: BotExpression.EXPRESSION_SIGNUP
+    text: BotExpression.EXPRESSION_SIGNUP,
+    decision: MessageID.MESSAGE_CHECK_PROFILE_ID
+  },
+  {
+    _id: MessageID.MESSAGE_CHECK_PROFILE_ID,
+    text: BotExpression.EXPRESSION_CHECKING_PROFILE
+  },
+  {
+    _id: MessageID.MESSAGE_PROFILE_NOT_FOUND_ID,
+    text: BotExpression.EXPRESSION_NO_SUCH_PROFILE
+  },
+  {
+    _id: MessageID.MESSAGE_GO_TO_PROFILE_ID,
+    text: BotExpression.EXPRESSION_PROFILE_FOUND
+  },
+  {
+    _id: MessageID.MESSAGE_REDIRECTION_ID,
+    text: BotExpression.EXPRESSION_REDIRECTION,
   },
   {
     _id: MessageID.MESSAGE_QUIT_ID,

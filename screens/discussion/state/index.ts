@@ -1,6 +1,6 @@
-// import * as DiscussionState from "./discussionSlice";
+import * as DiscussionState from "./discussionSlice";
 
-// export {DiscussionState};
+export { DiscussionState };
 
 // export { default as discussion} from "./discussionSlice";
 export { default as BusinessUtils } from "./businessUtils";

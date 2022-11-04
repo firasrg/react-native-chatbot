@@ -5,6 +5,8 @@ import useCachedResources from './hooks/useCachedResources';
 import useColorScheme from './hooks/useColorScheme';
 import Navigation from './navigation';
 import { LogBox } from "react-native";
+import { Provider } from "react-redux";
+import { store } from "@redux/store";
 
 LogBox.ignoreAllLogs();
 
@@ -22,10 +24,12 @@ export default function App() {
     
     return (
       <AppContext.Provider value={{profile: "test"}}>
-        <SafeAreaProvider>
-          <Navigation colorScheme={colorScheme}/>
-          <StatusBar/>
-        </SafeAreaProvider>
+        <Provider store={store}>
+          <SafeAreaProvider>
+            <Navigation colorScheme={colorScheme}/>
+            <StatusBar/>
+          </SafeAreaProvider>
+        </Provider>
       </AppContext.Provider>
     );
   }

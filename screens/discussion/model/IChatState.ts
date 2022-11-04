@@ -1,9 +1,8 @@
 import { IMessage } from "react-native-gifted-chat";
 
 export interface IChatState {
-  stepIndex: number,
+  currentStepId: number | string,
   messages: Array<IMessage>,
-  botIsTyping: boolean,
   textInput: {
     shown: boolean,
     content: undefined | string

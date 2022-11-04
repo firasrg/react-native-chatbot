@@ -13,39 +13,43 @@ import {
     IMessage,
     Reply,
     QuickRepliesProps,
-    Bubble,
     InputToolbar,
-    Send,
+    Send
 } from 'react-native-gifted-chat';
+
 import { RootStackScreenProps } from "@app/types";
 import { List } from "react-native-paper";
 import {
     BusinessUtils,
-    ChatConstants
+    ChatConstants,
+    DiscussionState
 } from "./state";
 import { IChatState } from "./model";
 import styles from "./styles";
 import messagesData from "./state/messagesData";
 import { AppContext } from "@app/App";
+import {
+    setBotTyping,
+    initialState
+} from "./state/discussionSlice";
+
 
 export default function ChatBotScreen( {navigation: _navigation}: RootStackScreenProps<'ChatScreen'> ) {
 
-    const appCntxt = React.useContext(AppContext);
+    const appCntxt = React.useContext( AppContext );
     
-    /** Using React useState() **/
-    const initialState: IChatState = {
-        botIsTyping: true,
-        stepIndex: 0,
+    const localInitialState: IChatState = {
+        currentStepId: 0,
         messages: [],
         textInput: {
             shown: false,
             content: undefined
         }
     };
-
     const [reinitialized, setReinit] = React.useState<boolean>( false )
-    const [chatState, setChatState] = React.useState<IChatState>( initialState )
-
+    const [chatState, setChatState] = React.useState<IChatState>(localInitialState )
+    const [state, dispatch] = React.useReducer(DiscussionState.reducer, initialState);
+    
     /** Using React useMemo() to translate all msgs **/
     const messagesDataMemo: Array<IMessage> = React.useMemo( () => messagesData, [reinitialized] );
 
@@ -59,10 +63,12 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
             setChatState( {
                 ...chatState,
                 messages: [
-                    {...messagesDataMemo[0], createdAt}
-                ],
-                botIsTyping: false
-            } ), 500 );
+                    {
+                        ...messagesDataMemo[0], 
+                        createdAt
+                    }
+                ]
+            } ), 2000 );
 
         // initialize UI with Screen right header to restart process
         _navigation.setOptions( {
@@ -77,7 +83,7 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                                 {
                                     text: "Ok",
                                     onPress: () => {
-                                        setChatState( initialState );
+                                        setChatState(localInitialState);
                                         setReinit( true );
                                     }
                                 },
@@ -95,13 +101,10 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
     }, [reinitialized] )
 
     /** Events **/
-    // when the user presses on a quick-reply option
+        // when the user presses on a quick-reply option
     const onQuickReply = ( replies: Array<Reply> ) => {
 
-            setChatState( {
-                ...chatState,
-                botIsTyping: true,
-            } );
+            dispatch(setBotTyping(1));
 
             const createdAt = new Date();
 
@@ -117,7 +120,7 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                         user: BusinessUtils.INSURED,
                         createdAt,
                     }
-                ] );
+                ]);
 
                 setTimeout( () =>
                         botSend( replies[0].messageId ),
@@ -130,10 +133,29 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
 
     // send msg handler
     const onSendMsg = ( messages: Array<IMessage> = [] ) => {
-        
-        let {stepIndex} = chatState;
 
-        stepIndex++;
+        let latestMsg = null;
+        let textInputContent = null;
+
+        // the following means the msg is not a quick-reply
+        if (typeof messages[0]._id === "string") {
+            dispatch(setBotTyping(1));
+            
+            setChatState( {
+                ...chatState,
+                textInput: {
+                    ...chatState.textInput,
+                    content: messages[0].text
+                }
+            });
+
+            const arrCopy = [...chatState.messages];
+
+            latestMsg = arrCopy[0];
+            textInputContent = messages[0].text;
+
+            // console.log("msg content: ", messages[0].text);
+        }
 
         setChatState( ( previousState: IChatState ) => {
 
@@ -153,17 +175,21 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                     Platform.OS !== 'web',
                 ),
                 textInput: {
-                    content: undefined,
+                    ...previousState.textInput,
                     shown: false
                 },
-                stepIndex,
+                currentStepId: messages[0]._id
             }
-        } )
+        } );
+
+        if (latestMsg && textInputContent) {
+            autoMsgAfterNoReply( latestMsg.decision, textInputContent );
+        }
     }
 
     // bot send msg handler
     const botSend = ( nextStepId: number, repliesToAvoid?: Reply[] ) => {
-        
+
         // bot next task lookup mecanism
         let nextBotMessage: IMessage = BusinessUtils.botNextStepLookup(
             messagesDataMemo,
@@ -176,15 +202,16 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
 
             const createdAt: Date = new Date();
 
-            setChatState( ( previousState ) =>
+            dispatch(setBotTyping(0));
+            
+            setChatState( (previousState: IChatState) =>
                 ({
                     ...previousState,
                     messages: GiftedChat.append(
                         previousState.messages,
                         [{...msg, createdAt}],
                         Platform.OS !== 'web',
-                    ),
-                    botIsTyping: false,
+                    )
                 })
             )
 
@@ -194,68 +221,80 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
 
     // After bot msg without quick reply handler
     // TODO - needs more care & improvements
-    function autoMsgAfterNoReply(id: number) {
+    function autoMsgAfterNoReply( id: number, textContent?: string ) {
 
-    const {MessageID} = ChatConstants;
+        const {MessageID} = ChatConstants;
 
-    const timeToWait: number = BusinessUtils.BOT_TYPING_DELAY_IN_SECONDS + 1000;
+        const timeToWait: number = BusinessUtils.BOT_TYPING_DELAY_IN_SECONDS + 1000;
 
-    // actions to do based on specific ids
-    switch (id) {
-      case MessageID.MESSAGE_SIGNUP_ID:
-        setTimeout(() => {
+        // actions to do based on specific ids
+        switch (id) {
+            case MessageID.MESSAGE_SIGNUP_ID:
+                setTimeout( () => {
 
-            setChatState(currentState => {
+                        setChatState( currentState => {
 
-              return {
-                ...currentState,
-                textInput: {
-                  ...currentState.textInput,
-                  shown: true
-                }
-              }
-            })
-          },
-          timeToWait - 2000
-        );
-        break;
-        
-      case MessageID.MESSAGE_CHECK_PROFILE_ID:
-        setTimeout(() => {
+                            return {
+                                ...currentState,
+                                textInput: {
+                                    ...currentState.textInput,
+                                    shown: true
+                                }
+                            }
+                        } )
+                    },
+                    timeToWait - 2000
+                );
+                break;
 
-            const {profile} = appCntxt;
-            const {textInput} = chatState;
-            
-            if (profile == textInput.content)
-              botSend(MessageID.MESSAGE_GO_TO_PROFILE_ID);
-            else
-              botSend(MessageID.MESSAGE_PROFILE_NOT_FOUND_ID);
-          },
-          timeToWait
-        );
-        break;
-        
-      case MessageID.MESSAGE_PROFILE_NOT_FOUND_ID:
-        setTimeout(() => {
-            botSend(MessageID.MESSAGE_SOMETHING_ELSE_ID);
-          },
-          timeToWait
-        );
-        break;
-        
-      case MessageID.MESSAGE_QUIT_ID:
-        setTimeout(() => {
-            _navigation.goBack();
-          },
-          timeToWait
-        );
-        break;
+            case MessageID.MESSAGE_CHECK_PROFILE_ID:
+                setTimeout( () => {
 
+                        const {profile} = appCntxt;
+                        // const { textInput } = chatState;
+
+                        console.log( "text input value :", textContent );
+
+                        if (profile == textContent)
+                            botSend( MessageID.MESSAGE_GO_TO_PROFILE_ID );
+
+                        else {
+                            botSend( MessageID.MESSAGE_PROFILE_NOT_FOUND_ID );
+                        }
+                    },
+                    timeToWait
+                );
+                break;
+
+            case MessageID.MESSAGE_PROFILE_NOT_FOUND_ID:
+                setTimeout( () => {
+                        botSend( MessageID.MESSAGE_SOMETHING_ELSE_ID );
+                    },
+                    timeToWait
+                );
+                break;
+
+            case MessageID.MESSAGE_GO_TO_PROFILE_ID:
+                setTimeout( () => {
+                        _navigation.navigate( "Modal" );
+                    },
+                    timeToWait
+                );
+                break;
+
+            case MessageID.MESSAGE_QUIT_ID:
+                setTimeout( () => {
+                        _navigation.goBack();
+                    },
+                    timeToWait
+                );
+                break;
+
+        }
     }
-  }
 
     /** rendering **/
-    function buildQuickReplies( quickReplies: QuickRepliesProps ): React.ReactNode {
+    function buildQuickReplies(quickReplies: QuickRepliesProps ): React.ReactNode {
 
         if (!quickReplies.nextMessage?.received) {
 
@@ -279,7 +318,7 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
             return React.Fragment;
         }
     }
-    
+
     const {
         shown: textInputShown,
         content: textInputContent
@@ -291,7 +330,8 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                 text={textInputContent}
                 user={BusinessUtils.INSURED}
                 messages={chatState.messages}
-                isTyping={chatState.botIsTyping}
+                isTyping={state.botIsTyping}
+                shouldUpdateMessage={() => true}
                 scrollToBottom={true}
                 alignTop={true}
                 renderAvatarOnTop={true}
@@ -306,11 +346,12 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                             style={styles.botAvatarImg}
                         />)
                 }}
-                renderInputToolbar={(props) => {
-                    return textInputShown ? <InputToolbar {...props} /> : null ;
+
+                renderInputToolbar={( props ) => {
+                    return textInputShown ? <InputToolbar {...props}/> : null;
                 }}
-                renderSend={(props) => {
-                    return  textInputShown ? <Send {...props} /> : null;
+                renderSend={( props ) => {
+                    return textInputShown ? <Send {...props} /> : null;
                 }}
                 renderTime={( timeProps ) => (
                     <View style={{
@@ -330,7 +371,6 @@ export default function ChatBotScreen( {navigation: _navigation}: RootStackScree
                         </Text>
                     </View>
                 )}
-                // renderBubble={(bubbleProps) => (<Bubble {...bubbleProps} containerStyle={{right:{width: "105%"}}}/>)}
                 parsePatterns={BusinessUtils.parsePatterns}
                 messagesContainerStyle={styles.msgContainer}
                 quickReplyStyle={styles.quickReply}
